@@ -1,20 +1,18 @@
-# Workflow Orchestration Engine (AI Engineering Internship Assignment)
+# Workflow Orchestration Engine 
 
-A lightweight, graph-based workflow engine built with Python and FastAPI. It allows you to define, execute, and monitor stateful agent workflows with branching, looping, and persistence.
-
-**Current Status:** Phase 4 Complete (Persistence & Async Execution).
+A lightweight, graph-based workflow engine built with Python and FastAPI. It orchestrates stateful agents using a node-edge architecture, supporting branching, looping, persistence, and **dynamic conditional serialization**.
+**Current Status:** Phase 5 Complete (Persistence, Async, & Dynamic Serialization).
 
 ## Core Features
 
 | Feature | Description | Status   |
 | :--- | :--- |:---------|
-| **Graph Engine** | Define workflows as Nodes (functions) and Edges (linear or conditional). | Complete |
+| **Graph Engine** | Define workflows as Nodes (functions) and Edges (transitions). | Complete |
+| **Dynamic Serialization** | **(Advanced)** Graphs, including conditional logic, are fully serialized to JSON. Branching logic is not hardcoded but referenced by name. | Complete |
 | **State Management** | Shared `WorkflowState` object (Pydantic) flows through the graph. | Complete |
-| **Branching & Looping** | Supports cyclic graphs (e.g., "retry until quality > threshold"). | Complete |
 | **Persistence** | **SQLite & SQLAlchemy** integration. Workflows and runs survive server restarts. | Complete |
 | **Async Execution** | Non-blocking execution using FastAPI BackgroundTasks. | Complete |
-| **Tool Registry** | Decoupled tool logic registered via decorators. | Complete |
-
+| **Tool Registry** | Decoupled tool & condition logic registered via decorators. | Complete |
 ---
 
 ## Project Structure
