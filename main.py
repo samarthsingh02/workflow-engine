@@ -1,5 +1,7 @@
 import uuid
 import json
+import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 from app.schemas import (
@@ -12,12 +14,11 @@ from app.engine.registry import ToolRegistry
 from app.db_session import engine, Base, get_db, SessionLocal
 from app.workflows.code_review import create_code_review_graph
 
-# --- INITIAL SETUP ---
-app = FastAPI(title="Workflow Engine API")
 
-
-@app.on_event("startup")
-def startup_event():
+# --- LIFESPAN MANAGER (Replaces startup_event) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- STARTUP LOGIC ---
     Base.metadata.create_all(bind=engine)
     print(">>> Database tables created/checked.")
 
@@ -26,8 +27,7 @@ def startup_event():
     if not db.query(DBGraphDefinition).filter(DBGraphDefinition.id == "demo-review").first():
         demo_graph = create_code_review_graph()
 
-        # Serialize the graph.
-        # Now we also serialize 'conditional_edges' by looking up the function name.
+        # Serialize the graph (including conditional edges)
         conditional_edges_data = []
         for src, func in demo_graph.conditional_edges.items():
             func_name = ToolRegistry.get_condition_name(func)
@@ -41,7 +41,7 @@ def startup_event():
             "name": "Code Review Agent Demo",
             "nodes": [{"name": n.name, "tool_name": n.tool_name} for n in demo_graph.nodes.values()],
             "edges": [{"from_node": src, "to_node": dest} for src, dest in demo_graph.edges.items()],
-            "conditional_edges": conditional_edges_data,  # <--- NEW FIELD
+            "conditional_edges": conditional_edges_data,
             "entry_point": demo_graph.entry_point
         }
 
@@ -54,6 +54,15 @@ def startup_event():
         db.commit()
         print(">>> Startup: Loaded 'demo-review' graph into DB.")
     db.close()
+
+    yield  # The application runs here
+
+    # --- SHUTDOWN LOGIC (Optional) ---
+    print(">>> Shutting down...")
+
+
+# --- INITIAL SETUP ---
+app = FastAPI(title="Workflow Engine API", lifespan=lifespan)
 
 
 # --- WORKER FUNCTIONS ---
@@ -89,6 +98,8 @@ def load_graph_from_db_definition(graph_definition: str) -> WorkflowGraph:
 def _execution_worker(run_id: str):
     """The background worker that runs the workflow engine."""
     worker_db = SessionLocal()
+    db_run = None  # <--- FIX: Initialize variable here to silence IDE warning
+
     try:
         db_run = worker_db.query(DBWorkflowRun).filter(DBWorkflowRun.id == run_id).one_or_none()
         if not db_run:
@@ -176,3 +187,8 @@ def get_run_state(run_id: str, db: Session = Depends(get_db)):
     if not db_run:
         raise HTTPException(status_code=404, detail="Run ID not found")
     return WorkflowState(**db_run.state_json)
+
+
+# --- ENTRY POINT FOR PYCHARM ---
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
