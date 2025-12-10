@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
+from typing import List
 
 class WorkflowState(BaseModel):
     """
@@ -19,3 +20,22 @@ class WorkflowState(BaseModel):
     def log(self, message: str):
         """Helper to append to logs"""
         self.logs.append(message)
+
+# --- API Models ---
+
+class NodeConfig(BaseModel):
+    name: str
+    tool_name: str
+
+class EdgeConfig(BaseModel):
+    from_node: str
+    to_node: str
+
+class CreateGraphRequest(BaseModel):
+    nodes: List[NodeConfig]
+    edges: List[EdgeConfig]
+    entry_point: str
+
+class RunGraphRequest(BaseModel):
+    graph_id: str
+    input_data: Any
