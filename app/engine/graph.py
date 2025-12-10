@@ -53,6 +53,7 @@ class WorkflowGraph:
         while current_node_name:
             if current_node_name == "END":
                 state.log("Workflow reached END.")
+                state.status = "COMPLETED"
                 break
 
             current_node = self.nodes.get(current_node_name)
@@ -63,10 +64,10 @@ class WorkflowGraph:
             state.log(f"Executing Node: {current_node_name}")
             try:
                 # Run the node logic (which runs the tool)
-                # Note: Tools should modify state in place or return it
                 current_node.run(state)
             except Exception as e:
                 state.log(f"Error in node {current_node_name}: {str(e)}")
+                state.status = "FAILED"
                 raise e
 
             # NAVIGATE (Determine next node)
@@ -86,6 +87,7 @@ class WorkflowGraph:
             # 3. If no edge, we stop (implicit END)
             else:
                 state.log("No outgoing edge found. Stopping.")
+                state.status = "FAILED"
                 next_node = None
 
             current_node_name = next_node

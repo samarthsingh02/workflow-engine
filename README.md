@@ -1,101 +1,116 @@
 # Workflow Orchestration Engine (AI Engineering Internship Assignment)
 
-This project implements a minimal, graph-based backend workflow engine using Python and FastAPI. It demonstrates fundamental concepts in system architecture, state management, asynchronous programming, and API design.
+A lightweight, graph-based workflow engine built with Python and FastAPI. It allows you to define, execute, and monitor stateful agent workflows with branching, looping, and persistence.
 
-The engine is designed to define, execute, and monitor a sequence of logical steps (Nodes) connected by defined transitions (Edges), maintaining a shared state throughout the execution.
+**Current Status:** Phase 4 Complete (Persistence & Async Execution).
 
 ## Core Features
 
-| Feature | Description | Status |
-| :--- | :--- | :--- |
-| **Minimal Graph Engine** | Supports defining Nodes (tools/functions) and Edges (linear flow) | **Complete** |
-| **State Management** | Uses a shared `WorkflowState` (Pydantic model) that flows between nodes. | **Complete** |
-| **Branching & Looping** | Implemented using a conditional edge function (`quality_gate`) to route execution back (loop) or forward (end). | **Complete** |
-| **Tool Registry** | Tools are decoupled and registered in a central registry, allowing nodes to reference them by string name. | **Complete** |
-| **FastAPI Endpoints** | Provides a RESTful API for graph creation, execution, and status monitoring. | **Complete** |
-| **Async Execution** | Workflow runs are executed asynchronously using FastAPI `BackgroundTasks`, ensuring the API remains responsive. | **Complete (Optional Requirement)** |
+| Feature | Description | Status   |
+| :--- | :--- |:---------|
+| **Graph Engine** | Define workflows as Nodes (functions) and Edges (linear or conditional). | Complete |
+| **State Management** | Shared `WorkflowState` object (Pydantic) flows through the graph. | Complete |
+| **Branching & Looping** | Supports cyclic graphs (e.g., "retry until quality > threshold"). | Complete |
+| **Persistence** | **SQLite & SQLAlchemy** integration. Workflows and runs survive server restarts. | Complete |
+| **Async Execution** | Non-blocking execution using FastAPI BackgroundTasks. | Complete |
+| **Tool Registry** | Decoupled tool logic registered via decorators. | Complete |
 
 ---
 
-## Code Structure
+## Project Structure
 
-The project is structured to separate the core engine logic from the application (FastAPI) and the specific workflow implementation.
+The project separates core engine logic from API and database layers.
 
 ```text
 workflow-engine/
 ├── app/
-│   ├── engine/          # The core Graph and Registry logic
-│   │   ├── graph.py     # Defines Node, WorkflowGraph, and the execution loop
-│   │   └── registry.py  # Decorator-based tool registration
-│   ├── workflows/       # Implementation of specific agents
-│   │   └── code_review.py # Option A (Code Review Agent) logic
-│   ├── db.py            # Simple in-memory storage for graphs and active runs
-│   └── schemas.py       # Pydantic models for State and API I/O validation
-├── main.py              # FastAPI application entry point
-└── requirements.txt     # List of project dependencies
+│   ├── engine/          
+│   │   ├── graph.py     # The core Execution Engine (Nodes, Loops, Transitions)
+│   │   └── registry.py  # Tool Registry (maps string names to functions)
+│   ├── workflows/       
+│   │   └── code_review.py # Example Implementation: Code Review Agent
+│   ├── db_session.py    # Database connection (SQLite + SQLAlchemy)
+│   └── schemas.py       # Pydantic Schemas & SQLAlchemy ORM Models
+├── main.py              # FastAPI Application & Endpoints
+└── requirements.txt     # Dependencies
 ```
+
+
+## Setup & Run
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/samarthsingh02/workflow-engine.git
+   cd workflow-engine
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   pip install fastapi uvicorn sqlalchemy pydantic uuid
+   ```
+
+3. **Start the Server:**
+
+   ```bash
+   uvicorn main:app --reload
+   ```
+
+   *On first run, this will create a `workflow.db` file in your root directory and load the demo graph.*
+
+4. **Access Docs:**
+   Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) to use the Swagger UI.
 
 ---
 
-## How to Run
+## Usage Example: Code Review Agent
 
-### 1. Clone the repository
+The system comes pre-loaded with a `Code Review Agent Demo` (Graph ID: `demo-review`). This workflow loops until the code complexity score is acceptable.
 
-```bash
-git clone https://github.com/samarthsingh02/workflow-engine.git
-cd workflow-engine
-```
+### 1. Trigger a Run
 
-### 2. Install dependencies
-
-```bash
-pip install fastapi uvicorn pydantic uuid
-# Or, if you have generated it:
-# pip install -r requirements.txt
-```
-
-### 3. Start the Server
-
-```bash
-uvicorn main:app --reload
-```
-
-### 4. Access Docs
-
-Open your browser to [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) to use the automatically generated Swagger UI.
-
----
-
-## Example Agent Workflow Implementation
-
-To demonstrate the engine's capabilities, the **Code Review Mini-Agent** (Option A) is implemented and pre-loaded with the ID `demo-review`.
-
-This workflow defines a loop: 
-
-**extract → analyze → (If score is bad: improve → analyze) → (If score is good: END)**
-
-### 1. Start a Run
-
-Use the `POST /graph/run` endpoint.
-
-| Parameter | Value |
-| :--- | :--- |
-| `graph_id` | `demo-review` |
-| `input_data` | Any string of code (e.g., a multi-line Python function) |
-
-**Example Request Body:**
+**POST** `/graph/run`
 
 ```json
 {
   "graph_id": "demo-review",
-  "input_data": "def foo():\n    if x:\n        for i in list:\n            nested=True"
+  "input_data": "def messy_function():\n    if x:\n        for i in list:\n            while True:\n                nested=True"
 }
 ```
 
-The response will immediately return a `run_id` and `status: submitted`.
+*Returns a `run_id` immediately.*
 
-### 2. Check Run Status and Logs
+### 2. Check Status
 
-Use the `GET /graph/state/{run_id}` endpoint, replacing `{run_id}` with the ID obtained from the previous step.
+**GET** `/graph/state/{run_id}`
 
-The output will show the `logs` array, demonstrating the execution path, including the multiple loops through the `analyze` and `improve` steps until the `complexity_score` drops below the threshold of 10.
+```json
+{
+  "status": "COMPLETED",
+  "logs": [
+    "Executing Node: extract",
+    "Executing Node: analyze",
+    "Calculated complexity score: 20 (Round 0)",
+    "Condition met. Routing to: improve",
+    "Executing Node: improve",
+    "Executing Node: analyze",
+    "Calculated complexity score: 15 (Round 1)",
+    "...",
+    "Workflow reached END."
+  ],
+  "data": { "complexity_score": 5, "review_round": 3 }
+}
+```
+
+---
+
+## Database
+
+The project uses **SQLite**.
+
+* **File:** `workflow.db` (created automatically in the root folder).
+* **Tables:**
+    * `graph_definitions`: Stores the structure (nodes/edges) of workflows.
+    * `workflow_runs`: Stores the execution history, state, and logs of every run.
+
